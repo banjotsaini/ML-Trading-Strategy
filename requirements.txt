@@ -1,0 +1,9 @@
+# requirements.txt content
+"""
+numpy
+pandas
+scikit-learn
+yfinance
+matplotlib
+"""
+```

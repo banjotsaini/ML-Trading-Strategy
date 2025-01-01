@@ -1,0 +1,313 @@
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, classification_report
+import joblib
+import warnings
+warnings.filterwarnings('ignore')
+
+class FeatureEngineer:
+    @staticmethod
+    def calculate_technical_indicators(data):
+        """
+        Calculate technical indicators for feature engineering
+        
+        Parameters:
+        -----------
+        data : pandas.DataFrame
+            Historical stock price data
+        
+        Returns:
+        --------
+        pandas.DataFrame
+            DataFrame with added technical indicators
+        """
+        # Moving Averages
+        data['MA5'] = data['Close'].rolling(window=5).mean()
+        data['MA20'] = data['Close'].rolling(window=20).mean()
+        data['MA50'] = data['Close'].rolling(window=50).mean()
+        
+        # Relative Strength Index (RSI)
+        delta = data['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        
+        rs = gain / loss
+        data['RSI'] = 100 - (100 / (1 + rs))
+        
+        # MACD
+        exp1 = data['Close'].ewm(span=12, adjust=False).mean()
+        exp2 = data['Close'].ewm(span=26, adjust=False).mean()
+        data['MACD'] = exp1 - exp2
+        data['Signal_Line'] = data['MACD'].ewm(span=9, adjust=False).mean()
+        
+        # Bollinger Bands
+        data['BB_Middle'] = data['Close'].rolling(window=20).mean()
+        data['BB_Upper'] = data['BB_Middle'] + 2 * data['Close'].rolling(window=20).std()
+        data['BB_Lower'] = data['BB_Middle'] - 2 * data['Close'].rolling(window=20).std()
+        
+        return data.dropna()
+
+class MLTradingStrategy:
+    def __init__(self, initial_capital=2500, risk_percentage=0.02):
+        """
+        Initialize the trading strategy
+        
+        Parameters:
+        -----------
+        initial_capital : float, optional
+            Starting capital for trading (default: 2500)
+        risk_percentage : float, optional
+            Percentage of capital to risk per trade (default: 0.02 or 2%)
+        """
+        self.capital = initial_capital
+        self.risk_percentage = risk_percentage
+        self.models = self.build_ensemble_models()
+        self.feature_engineer = FeatureEngineer()
+        self.scaler = StandardScaler()
+    
+    def build_ensemble_models(self):
+        """
+        Build ensemble of machine learning models
+        
+        Returns:
+        --------
+        dict
+            Dictionary of trained machine learning models
+        """
+        models = {
+            'random_forest': RandomForestClassifier(
+                n_estimators=100, 
+                random_state=42, 
+                n_jobs=-1
+            ),
+            'gradient_boosting': GradientBoostingClassifier(
+                n_estimators=100, 
+                learning_rate=0.1, 
+                random_state=42
+            ),
+            'svm': SVC(
+                kernel='rbf', 
+                probability=True, 
+                random_state=42
+            )
+        }
+        return models
+    
+    def prepare_features(self, ticker, start_date='2020-01-01', end_date=None):
+        """
+        Fetch and prepare features for a given stock
+        
+        Parameters:
+        -----------
+        ticker : str
+            Stock ticker symbol
+        start_date : str, optional
+            Start date for historical data
+        end_date : str, optional
+            End date for historical data (defaults to current date)
+        
+        Returns:
+        --------
+        tuple
+            Features and target variable
+        """
+        # Download historical stock data
+        if end_date is None:
+            end_date = pd.Timestamp.now().strftime('%Y-%m-%d')
+        
+        data = yf.download(ticker, start=start_date, end=end_date)
+        
+        # Feature engineering
+        data = self.feature_engineer.calculate_technical_indicators(data)
+        
+        # Create target variable: price movement (1 for increase, 0 for decrease)
+        data['Target'] = np.where(data['Close'].shift(-1) > data['Close'], 1, 0)
+        
+        # Select features
+        features = [
+            'MA5', 'MA20', 'MA50', 'RSI', 'MACD', 'Signal_Line', 
+            'BB_Upper', 'BB_Lower', 'Volume'
+        ]
+        
+        X = data[features]
+        y = data['Target']
+        
+        # Scale features
+        X_scaled = self.scaler.fit_transform(X)
+        
+        return X_scaled, y
+    
+    def train_models(self, X, y):
+        """
+        Train ensemble machine learning models
+        
+        Parameters:
+        -----------
+        X : numpy.ndarray
+            Scaled feature matrix
+        y : pandas.Series
+            Target variable
+        """
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        # Train and evaluate each model
+        for name, model in self.models.items():
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            
+            print(f"{name.replace('_', ' ').title()} Model Performance:")
+            print(classification_report(y_test, y_pred))
+            
+            # Save trained models
+            joblib.dump(model, f'{name}_model.pkl')
+    
+    def predict_trades(self, features):
+        """
+        Generate trade predictions using ensemble voting
+        
+        Parameters:
+        -----------
+        features : numpy.ndarray
+            Scaled features for prediction
+        
+        Returns:
+        --------
+        dict
+            Trade recommendations and confidence
+        """
+        predictions = {}
+        confidences = []
+        
+        for name, model in self.models.items():
+            pred = model.predict(features)
+            pred_proba = model.predict_proba(features)
+            
+            predictions[name] = {
+                'prediction': pred[0],
+                'confidence': pred_proba[0].max()
+            }
+            confidences.append(pred_proba[0].max())
+        
+        # Ensemble voting
+        ensemble_prediction = sum(
+            pred['prediction'] * pred['confidence'] 
+            for pred in predictions.values()
+        ) / len(predictions)
+        
+        average_confidence = np.mean(confidences)
+        
+        return {
+            'prediction': 1 if ensemble_prediction > 0.5 else 0,
+            'confidence': average_confidence
+        }
+    
+    def risk_management(self, trade_prediction, current_price):
+        """
+        Calculate position sizing and stop loss
+        
+        Parameters:
+        -----------
+        trade_prediction : dict
+            Trade prediction details
+        current_price : float
+            Current stock price
+        
+        Returns:
+        --------
+        dict
+            Trade execution details
+        """
+        if trade_prediction['confidence'] < 0.7:
+            return {'action': 'no_trade', 'reason': 'Low confidence'}
+        
+        # Calculate position size
+        risk_amount = self.capital * self.risk_percentage
+        shares = int(risk_amount / current_price)
+        
+        # Stop loss calculation (3% below entry)
+        stop_loss_price = current_price * 0.97
+        
+        return {
+            'action': 'buy' if trade_prediction['prediction'] == 1 else 'sell',
+            'shares': shares,
+            'entry_price': current_price,
+            'stop_loss': stop_loss_price,
+            'confidence': trade_prediction['confidence']
+        }
+    
+    def execute_trades(self, ticker, recommendations):
+        """
+        Execute trades based on recommendations
+        
+        Parameters:
+        -----------
+        ticker : str
+            Stock ticker symbol
+        recommendations : dict
+            Trade recommendations
+        
+        Returns:
+        --------
+        dict
+            Trade execution results
+        """
+        if recommendations['action'] == 'no_trade':
+            return recommendations
+        
+        # Simulated trade execution (replace with actual broker API)
+        trade_result = {
+            'ticker': ticker,
+            **recommendations
+        }
+        
+        # Update capital (simulated)
+        if recommendations['action'] == 'buy':
+            self.capital -= recommendations['shares'] * recommendations['entry_price']
+        else:
+            self.capital += recommendations['shares'] * recommendations['entry_price']
+        
+        return trade_result
+
+# Example Usage
+def main():
+    strategy = MLTradingStrategy()
+    
+    # Example tickers
+    tickers = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'META']
+    
+    for ticker in tickers:
+        print(f"\nAnalyzing {ticker}")
+        
+        # Prepare features
+        X, y = strategy.prepare_features(ticker)
+        
+        # Train models
+        strategy.train_models(X, y)
+        
+        # Get latest features for prediction
+        latest_features = X[-1].reshape(1, -1)
+        
+        # Predict trades
+        trade_prediction = strategy.predict_trades(latest_features)
+        
+        # Get current price
+        current_price = yf.Ticker(ticker).history(period='1d')['Close'][0]
+        
+        # Risk management
+        trade_recommendation = strategy.risk_management(trade_prediction, current_price)
+        
+        # Execute trades
+        trade_result = strategy.execute_trades(ticker, trade_recommendation)
+        
+        print("Trade Result:", trade_result)
+
+if __name__ == "__main__":
+    main()

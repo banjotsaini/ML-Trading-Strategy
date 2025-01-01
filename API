@@ -1,0 +1,9 @@
+import alpaca_trade_api as tradeapi
+
+api = tradeapi.REST('API_KEY', 'SECRET_KEY', 'https://paper-api.alpaca.markets')
+
+def execute_trade(ticker, action, shares):
+    if action == 'buy':
+        api.submit_order(symbol=ticker, qty=shares, side='buy', type='market', time_in_force='gtc')
+    elif action == 'sell':
+        api.submit_order(symbol=ticker, qty=shares, side='sell', type='market', time_in_force='gtc')
