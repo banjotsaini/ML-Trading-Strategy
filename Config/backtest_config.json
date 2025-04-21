@@ -1,0 +1,42 @@
+{
+    "strategy_name": "MLTradingStrategy",
+    "tickers": ["AAPL", "GOOGL", "MSFT", "AMZN", "META"],
+    "start_date": "2020-01-01",
+    "end_date": "2023-12-31",
+    "initial_capital": 10000.0,
+    "commission": 0.001,
+    "slippage": 0.001,
+    "parameters": {
+        "risk_percentage": 0.02,
+        "ensemble_method": "dynamic_ensemble",
+        "signal_threshold": 0.7,
+        "model_evaluation_window": 10
+    },
+    "data_source": {
+        "type": "csv",
+        "data_dir": "data"
+    },
+    "optimization": {
+        "enabled": false,
+        "method": "grid",
+        "metric": "sharpe_ratio",
+        "n_iter": 10,
+        "n_jobs": 1,
+        "param_grid": {
+            "risk_percentage": [0.01, 0.02, 0.03, 0.05],
+            "ensemble_method": ["simple_average", "weighted_average", "majority_vote", "weighted_vote", "confidence_weighted", "dynamic_ensemble"],
+            "signal_threshold": [0.5, 0.6, 0.7, 0.8]
+        },
+        "walk_forward": {
+            "enabled": false,
+            "train_size": 252,
+            "test_size": 63,
+            "step_size": 63
+        }
+    },
+    "output": {
+        "save_results": true,
+        "output_dir": "backtest_results",
+        "plot_results": true
+    }
+}

@@ -81,6 +81,9 @@ class MLTradingStrategy:
             model_performances=self.model_performances
         )
         
+        # Record predictions for performance tracking
+        self.record_predictions(predictions)
+        
         return {
             'signal': 1 if ensemble_prediction > 0.5 else 0,
             'confidence': ensemble_confidence,

@@ -1,0 +1,31 @@
+{
+    "provider": "alphavantage",
+    "api_key": "YOUR_API_KEY_HERE",
+    "tickers": ["AAPL", "GOOGL", "MSFT", "AMZN", "META"],
+    "update_interval": 60,
+    "signal_threshold": 0.7,
+    "window_size": 100,
+    "ensemble_method": "dynamic_ensemble",
+    "notifications": {
+        "enabled": true,
+        "throttle_period": 300,
+        "email": {
+            "enabled": true,
+            "smtp_server": "smtp.gmail.com",
+            "smtp_port": 587,
+            "username": "your-email@gmail.com",
+            "password": "your-app-password",
+            "from_email": "your-email@gmail.com"
+        },
+        "sms": {
+            "enabled": false
+        }
+    },
+    "notification_recipients": [
+        "recipient-email@example.com"
+    ],
+    "market_hours": {
+        "timezone": "America/New_York",
+        "include_extended_hours": false
+    }
+}

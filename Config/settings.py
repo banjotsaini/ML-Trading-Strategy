@@ -19,3 +19,16 @@ class Settings:
     TRAIN_TEST_SPLIT = 0.2
     RANDOM_SEED = 42
     
+    # Ensemble Method Parameters
+    DEFAULT_ENSEMBLE_METHOD = 'dynamic_ensemble'
+    MODEL_EVALUATION_WINDOW = 10
+    
+    # Available Ensemble Methods
+    ENSEMBLE_METHODS = [
+        'simple_average',
+        'weighted_average',
+        'majority_vote',
+        'weighted_vote',
+        'confidence_weighted',
+        'dynamic_ensemble'
+    ]
