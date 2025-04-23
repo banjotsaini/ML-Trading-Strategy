@@ -82,14 +82,6 @@ Or use the convenience scripts:
 run_backtest.bat   # Windows
 ```
 
-### Recommended Enhancements
-1. Add broker API integration
-2. ✓ Implement more sophisticated ensemble methods
-3. ✓ Add real-time market data integration
-4. ✓ Implement backtesting framework
-5. Add more advanced feature engineering
-6. Create comprehensive unit tests
-7. Add performance tracking and reporting
 
 ml-trading-strategy/
 │
